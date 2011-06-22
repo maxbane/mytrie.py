@@ -75,16 +75,50 @@ The module-level function `isStringLike` is provided to assist you in
 determining whether your custom types are string-like.
 
 Furthermore, a fully general `StringLike` class is provided, which is capable of
-representing sequences of of objects of any (possibly heterogeneous) types, and
-satisfying the conditions of string-likeness for use with the generic trie
-classes. 
+representing sequences of objects of any hashable types (possibly
+heterogeneous), and satisfying the conditions of string-likeness for use with
+the generic trie classes. 
 
 Examples
 --------
 
-See the method docstrings below for more examples.
+See the method docstrings of the trie classes for more examples.
 
 `TODO`
+
+Performance
+-----------
+
+For large collections of strings, the trie classes can be quite a bit faster at
+finding prefix/suffix relationships than naive methods using built-in types. For
+example, let's create a module `test.py` like so:
+
+    import mytrie
+    
+    # 565 kiloword novel
+    corpus = open('war_and_peace.txt', 'r').read()
+    tokens = corpus.split()
+    
+    s = set(tokens)
+    ts = mytrie.TrieSet(tokens)
+    
+    def naive_extensions(prefix, collection):
+        for string in collection:
+            if string.startswith(prefix):
+                yield string
+
+A comparison of the naive generator of string extensions to
+`TrieSet.extensions`:
+
+    $ python -m timeit -s "import test" "list(test.naive_extensions('t', test.s))"
+    100 loops, best of 3: 12.8 msec per loop
+
+    $ python -m timeit -s "import test" "list(test.ts.extensions('t'))"
+    100 loops, best of 3: 6.64 msec per loop
+
+So `TrieSet.extensions` is about twice as fast, and the difference gets larger
+the more strings there are.
+
 
 
 Version history
