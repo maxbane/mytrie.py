@@ -64,6 +64,8 @@ Examples
 See the method docstrings below for more examples.
 
 TODO
+
+END MODULE DOC
 """
 
 __version__ = "0.1.0"
