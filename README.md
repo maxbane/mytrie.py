@@ -2,18 +2,38 @@
 =====================================
 
 Copyright 2011 by Max Bane.  
-Distributed subject to the Creative Commons Attribution 3.0 Unported license (CC
-BY 3.0): http://creativecommons.org/licenses/by/3.0/
+
+Distributed subject to the Creative Commons Attribution 3.0 Unported license 
+(CC BY 3.0): http://creativecommons.org/licenses/by/3.0/
 
 A library of generic Trie data structures
 -----------------------------------------
 
 A _trie_ (rhymes with "sky") is a [tree-based data
 structure](http://en.wikipedia.org/wiki/Trie) that is useful for space-efficient
-storage or mapping of strings and string-like sequences, and for quickly finding
-string prefixes, suffixes, extensions, and so on.
+storage and mapping of strings and string-like sequences, and for quickly
+finding string prefixes, suffixes, extensions, and so on.
 
-`TODO`
+A trie of strings has less space complexity than a hash table of strings, but
+greater time complexity in testing membership. However, a trie is very efficient
+if you are interested in the prefix/suffix relationships of the strings, and so
+it is quite useful for string autocompletion applications, computational
+lexicography and morphology, storing n-gram databases, and so on.
+
+This module provides a library of trie classes for python, which are generic
+enough to work efficiently with other kinds of sequences than character-strings,
+as long as they are "string-like" in a sense defined below. You should thus be
+able to use this module to construct tries of any sequential data structure for
+which the concept makes sense: tries of characters, tries of word tokens and
+n-grams, tries of numerical sequences, tries of paths in an arbitrary graph, and
+whatever you can think of.
+
+Two generic trie classes are provided: `TrieSet` and `TrieDict`, both of which
+inherit from an abstract base class `TrieBase`. Use `TrieSet` when you just need
+a collection of string-like objects, and use `TrieDict` when you need a mapping
+from string-like objects to arbitrary values. Neither class has any notion of an
+ordering on the string-like objects; ordered tries may be included in a future
+version of this module.
 
 String-like types
 -----------------
@@ -59,10 +79,6 @@ representing sequences of of objects of any (possibly heterogeneous) types, and
 satisfying the conditions of string-likeness for use with the generic trie
 classes. 
 
-You should thus be able to use this module to construct tries of any sequential
-data structure for which the concept makes sense: tries of character strings,
-tries of word tokens, tries of paths in an arbitrary graph, and so on.
-
 Examples
 --------
 
@@ -70,3 +86,10 @@ See the method docstrings below for more examples.
 
 `TODO`
 
+
+Version history
+---------------
+
+Version 0.1.0 (when):
+
+  - `TODO`

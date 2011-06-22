@@ -3,18 +3,38 @@
 =====================================
 
 Copyright 2011 by Max Bane.  
-Distributed subject to the Creative Commons Attribution 3.0 Unported license (CC
-BY 3.0): http://creativecommons.org/licenses/by/3.0/
+
+Distributed subject to the Creative Commons Attribution 3.0 Unported license 
+(CC BY 3.0): http://creativecommons.org/licenses/by/3.0/
 
 A library of generic Trie data structures
 -----------------------------------------
 
 A _trie_ (rhymes with "sky") is a [tree-based data
 structure](http://en.wikipedia.org/wiki/Trie) that is useful for space-efficient
-storage or mapping of strings and string-like sequences, and for quickly finding
-string prefixes, suffixes, extensions, and so on.
+storage and mapping of strings and string-like sequences, and for quickly
+finding string prefixes, suffixes, extensions, and so on.
 
-`TODO`
+A trie of strings has less space complexity than a hash table of strings, but
+greater time complexity in testing membership. However, a trie is very efficient
+if you are interested in the prefix/suffix relationships of the strings, and so
+it is quite useful for string autocompletion applications, computational
+lexicography and morphology, storing n-gram databases, and so on.
+
+This module provides a library of trie classes for python, which are generic
+enough to work efficiently with other kinds of sequences than character-strings,
+as long as they are "string-like" in a sense defined below. You should thus be
+able to use this module to construct tries of any sequential data structure for
+which the concept makes sense: tries of characters, tries of word tokens and
+n-grams, tries of numerical sequences, tries of paths in an arbitrary graph, and
+whatever you can think of.
+
+Two generic trie classes are provided: `TrieSet` and `TrieDict`, both of which
+inherit from an abstract base class `TrieBase`. Use `TrieSet` when you just need
+a collection of string-like objects, and use `TrieDict` when you need a mapping
+from string-like objects to arbitrary values. Neither class has any notion of an
+ordering on the string-like objects; ordered tries may be included in a future
+version of this module.
 
 String-like types
 -----------------
@@ -59,10 +79,6 @@ Furthermore, a fully general `StringLike` class is provided, which is capable of
 representing sequences of of objects of any (possibly heterogeneous) types, and
 satisfying the conditions of string-likeness for use with the generic trie
 classes. 
-
-You should thus be able to use this module to construct tries of any sequential
-data structure for which the concept makes sense: tries of character strings,
-tries of word tokens, tries of paths in an arbitrary graph, and so on.
 
 Examples
 --------
@@ -109,11 +125,158 @@ def isStringLike(obj, nullObj):
 
 #===============================================================================
 
+class StringLike(object):
+    """
+    Provides a string-like type for representing immutable sequences of tokens,
+    where a token is an arbitrary hashable object. Essentially a thin wrapper
+    around the tuple type, with the key differences for string-likeness being
+    the implementations of __iter__, __getitem__, and __contains__.
+
+    Examples
+    ========
+    >>> s1 = StringLike('hello to the world of worlds of jello!')
+    >>> s2 = StringLike('hello to the world of worlds of jello!'.split())
+    >>> s1 == s2
+    False
+
+    >>> len(s1)
+    38
+
+    >>> len(s2)
+    8
+
+    >>> bool(s1) and bool(s2)
+    True
+
+    >>> StringLike.Empty == StringLike()
+    True
+
+    >>> len(StringLike.Empty)
+    0
+
+    >>> bool(StringLike.Empty)
+    False
+
+    >>> StringLike.Empty in s1 and StringLike.Empty in s2
+    True
+
+    >>> StringLike.Empty + s1 + StringLike.Empty == s1
+    True
+
+    >>> isStringLike(s1, StringLike.Empty) and isStringLike(s2, StringLike.Empty)
+    True
+
+    >>> s1
+    StringLike(('h', 'e', 'l', 'l', 'o', ' ', 't', 'o', ' ', 't', 'h', 'e', ' ', 'w', 'o', 'r', 'l', 'd', ' ', 'o', 'f', ' ', 'w', 'o', 'r', 'l', 'd', 's', ' ', 'o', 'f', ' ', 'j', 'e', 'l', 'l', 'o', '!'))
+
+    >>> s2
+    StringLike(('hello', 'to', 'the', 'world', 'of', 'worlds', 'of', 'jello!'))
+
+    >>> s1 == eval(repr(s1))
+    True
+
+    >>> s2 == eval(repr(s2))
+    True
+
+    >>> list(s2)
+    [StringLike(('hello',)), StringLike(('to',)), StringLike(('the',)), StringLike(('world',)), StringLike(('of',)), StringLike(('worlds',)), StringLike(('of',)), StringLike(('jello!',))]
+
+    >>> s2[2]
+    StringLike(('the',))
+
+    >>> s1 == s1[:] and s2 == s2[:]
+    True
+    
+    >>> s2[2:6]
+    StringLike(('the', 'world', 'of', 'worlds'))
+
+    >>> s2[2:6] in s2
+    True
+
+    >>> s2[2:6] in s1
+    False
+
+    Arbitrary hashable elements
+    ------------------
+    >>> s3 = StringLike([42, 'question', 1.5, (1, (2,3)), 44])
+    >>> isStringLike(s3, StringLike.Empty)
+    True
+
+    >>> s3[:] == s3
+    True
+
+    >>> StringLike.Empty in s3
+    True
+
+    >>> len(s3)
+    5
+    """
+
+    Empty = None # reassigned below
+
+    def __init__(self, tokens=None):
+        self.tokens = tuple(tokens) if tokens else ()
+
+    def __bool__(self):
+        return bool(self.tokens)
+
+    def __repr__(self):
+        if self:
+            return 'StringLike(%r)' % (self.tokens,)
+        return 'StringLike.Empty'
+
+    def __hash__(self):
+        return hash(self.tokens)
+
+    def __getitem__(self, i):
+        if isinstance(i, slice):
+            return StringLike(self.tokens[i])
+        return StringLike((self.tokens[i],))
+
+    def __cmp__(self, other):
+        return cmp(self.tokens, other.tokens)
+
+    def __iter__(self):
+        for tok in self.tokens:
+            yield StringLike((tok,))
+
+    def __len__(self):
+        return len(self.tokens)
+
+    def __add__(self, other):
+        return StringLike(self.tokens + other.tokens)
+
+    def __contains__(self, other):
+        if other == StringLike.Empty:
+            return True
+        for match in KnuthMorrisPratt(self, other):
+            return True
+        return False
+
+StringLike.Empty = StringLike()
+
+#===============================================================================
+
 class TrieBase(object):
+    """
+    The base class of all tries provided by the mytrie module. At a minimum,
+    subclasses must:
+      - call `super(Subclass, self).__init__(null_element)` in their
+        constructors.
+      - create a self._root member variable which must be a list whose first
+        element is a dictionary (initially `{}`) from string elements to
+        associated subnodes, and whose second element is a boolean (initially
+        `False`) indicating whether a contained key terminates at the root node;
+        each subnode must have the same structure. The list may contain
+        additional elements, for functionality specific to the subclass. See the
+        implementation of `TrieSet` for the simplest example.
+      - implement some method of adding keys; see `TrieSet.add()` for an
+        example.
+    """
     def __init__(self, null_element):
         self._null_element = null_element
 
-        if not isStringlike(null_element, null_element):
+        if not isStringLike(null_element, null_element):
             raise TypeError('null_element %r is not itself string-like!' %\
                     (null_element,))
 
@@ -140,10 +303,9 @@ class TrieBase(object):
                 return None
         return cur_node
 
-    def has_prefix(self, prefix):
+    def has_extension_of(self, prefix):
         """
-        Return True if the given string-like is a prefix of any contained element.
-
+        Return True if the given string-like is a prefix of any contained key.
         """
         return self.__nodeOf(prefix) is not None
 
@@ -184,7 +346,7 @@ class TrieBase(object):
     #            stack.append((prefix+el, el_node))
 
     def __len__(self):
-        # should be equivalent to len(list(self)), but faster
+        # should be equivalent to len(tuple(self)), but faster
         stack = [el_node for el_node in self._root[0].itervalues()]
         n = 0
         
@@ -197,9 +359,6 @@ class TrieBase(object):
 
         return n
 
-    def update(self, *args):
-        raise NotImplementedError
-            
     def successors(self, prefix):
         """
         Generate (in arbitrary order) those prefixes of contained keys that
@@ -209,6 +368,7 @@ class TrieBase(object):
         Raise a KeyError if the given prefix is not a prefix of any contained
         element.
 
+        See subclass docstrings for usage examples with each subclass.
         """
 
         # find the node where the given prefix ends, if any
@@ -225,9 +385,9 @@ class TrieBase(object):
             for node, subel in self.__generateSubNodes(el_node, prefix+el):
                 yield node, subel
 
-    def extensions(self, prefix, members_only=True):
+    def suffixes(self, prefix, members_only=True):
         """
-        Generate, in arbitrary order, those strings which are extensions of the
+        Generate, in arbitrary order, those strings which are suffixes of the
         given prefix, and either:
             - contained keys themselves if members_only is True (the
               default), or
@@ -236,17 +396,100 @@ class TrieBase(object):
         If the given prefix is not a prefix of any contained element, raise a
         KeyError.
 
+        See subclass docstrings for usage examples with each subclass.
         """
-        
         # find the node where the given prefix ends, if any
         node = self.__nodeOf(prefix)
         if node is None:
             raise KeyError('%r is not a prefix of any contained element.' %\
                     prefix)
 
-        for node, suff in self.__generateSubNodes(node, prefix):
+        for node, suff in self.__generateSubNodes(node, self._null_element):
             if (not members_only) or node[1]:
                 yield suff
+
+    def maximal_suffix(self, prefix):
+        """
+        Return a maximal suffix `s` of `prefix` such that `prefix+s` is a
+        contained key. If there is more than one maximal suffix, it is undefined
+        which one is returned.
+
+        See subclass docstrings for usage examples with each subclass.
+        """
+        # find the node where the given prefix ends, if any
+        node = self.__nodeOf(prefix)
+        if node is None:
+            raise KeyError('%r is not a prefix of any contained element.' %\
+                    prefix)
+
+        maxSuff = self._null_element
+        for node, suff in self.__generateSubNodes(node, self._null_element):
+            if node[1] and len(suff) > len(maxSuff):
+                maxSuff = suff
+
+        return maxSuff
+
+    def extensions(self, prefix, members_only=True):
+        """
+        Generate, in arbitrary order, those strings which are extensions of the
+        given prefix, and either:
+            - contained keys themselves if members_only is True (the
+              default), or
+            - prefixes of contained keys if members_only is False.
+
+        The difference between a *suffix* and an *extension* is that an
+        extension begins with the initial prefix; i.e., `"partytime"` is the
+        extension of `"party"` gotten by appending the suffix `"time"`.
+
+        If the given prefix is not a prefix of any contained element, raise a
+        KeyError.
+
+        See subclass docstrings for usage examples with each subclass.
+        """
+        for suff in self.suffixes(prefix, members_only=members_only):
+            yield prefix+suff
+
+    def maximal_extension(self, prefix):
+        """
+        Return `prefix + self.maximal_suffix(prefix)`.
+        """
+        return prefix + self.maximal_suffix(prefix)
+
+    def prefixes(self, string):
+        """
+        Generate, in arbitrary order, those contained keys which are prefixes of
+        the given string.
+
+        See subclass docstrings for usage examples with each subclass.
+        """
+        try:
+            for (i, node) in enumerate(self.__pathTo(string)):
+                if node[1]:
+                    # is a member
+                    yield string[:i]
+        except KeyError:
+            pass
+
+    def maximal_prefix(self, string):
+        """
+        Return the longest key which is a prefix of the given string. Raise a
+        KeyError if no keys are a prefix thereof.
+
+        See subclass docstrings for usage examples with each subclass.
+        """
+        try:
+            mi = None
+            for (i, node) in enumerate(self.__pathTo(string)):
+                if node[1]:
+                    # is a member
+                    mi = i
+        except KeyError:
+            pass
+
+        if mi is not None:
+            return string[:mi]
+
+        raise KeyError('No key is a prefix of %r.' % string)
 
 
 #===============================================================================
@@ -267,7 +510,12 @@ class TrieSet(TrieBase):
     type will be added to the TrieSet (see module documentation for definitions).
     If not given, it defaults to '', the null element for type str.
 
+    Examples
+    ========
     >>> t = TrieSet(['abc', 'aac', 'adc', 'adce'])
+
+    Behaves as a container:
+    -----------------------
     >>> 'abc' in t
     True
 
@@ -287,21 +535,31 @@ class TrieSet(TrieBase):
     >>> sorted(list(t))
     ['aac', 'abc', 'adc', 'adce', 'xxx']
 
-    >>> t.has_prefix('a')
+    See the method docstrings for examples of set-like behavior (union,
+    intersection, etc.).
+
+    Prefixes:
+    -----------------------
+    >>> set(t.prefixes('adc')) == set(['adc'])
     True
 
-    >>> t.has_prefix('ad')
+    >>> set(t.prefixes('adcefgh')) == set(['adc', 'adce'])
     True
 
-    >>> t.has_prefix('abc')
-    True
+    >>> print t.maximal_prefix('adcefgh')
+    adce
 
-    >>> t.has_prefix('b')
-    False
+    >>> print t.maximal_prefix('ad')
+    Traceback (most recent call last):
+        ...
+    KeyError: "No key is a prefix of 'ad'."
 
-    >>> t.has_prefix('')
-    True
+    # If contained, the empty string is a prefix of everything
+    >>> (t | TrieSet([''])).maximal_prefix('plugh')
+    ''
 
+    Successors:
+    -----------------------
     >>> set(t.successors('a')) == set(['ab', 'aa', 'ad'])
     True
 
@@ -316,6 +574,66 @@ class TrieSet(TrieBase):
         ...
     KeyError: "'b' is not a prefix of any contained element."
 
+    Suffixes:
+    -----------------------
+    >>> set(t.suffixes('ad')) == set(['c', 'ce'])
+    True
+
+    >>> set(t.suffixes('adc')) == set(['', 'e'])
+    True
+
+    >>> all(['adc'+suff in t for suff in t.suffixes('adc')])
+    True
+
+    >>> set(t.suffixes('a')) == set(['bc', 'ac', 'dc', 'dce'])
+    True
+
+    >>> set(t.suffixes('a', members_only=False)) == \
+    ...     set(['', 'b', 'a', 'd', 'bc', 'ac', 'dc', 'dce'])
+    True
+
+    >>> set(t.suffixes('abc')) == set([''])
+    True
+
+    >>> set(t.suffixes('')) == set(t)
+    True
+
+    >>> set(t.suffixes('', members_only=True)).issuperset(set(t))
+    True
+
+    >>> set(t.suffixes('b'))
+    Traceback (most recent call last):
+        ...
+    KeyError: "'b' is not a prefix of any contained element."
+
+    >>> t.maximal_suffix('')
+    'adce'
+
+    >>> t.maximal_suffix('a')
+    'dce'
+
+    >>> t.maximal_suffix('y')
+    Traceback (most recent call last):
+        ...
+    KeyError: "'y' is not a prefix of any contained element."
+
+    Extensions:
+    -----------------------
+    >>> t.has_extension_of('a')
+    True
+
+    >>> t.has_extension_of('ad')
+    True
+
+    >>> t.has_extension_of('abc')
+    True
+
+    >>> t.has_extension_of('b')
+    False
+
+    >>> t.has_extension_of('')
+    True
+
     >>> set(t.extensions('ad')) == set(['adc', 'adce'])
     True
 
@@ -323,6 +641,9 @@ class TrieSet(TrieBase):
     True
 
     >>> set(t.extensions('a')) == set(['abc', 'aac', 'adc', 'adce'])
+    True
+
+    >>> all(['a'+suff in list(t.extensions('a')) for suff in t.suffixes('a')])
     True
 
     >>> set(t.extensions('a', members_only=False)) == \
@@ -402,7 +723,7 @@ class TrieSet(TrieBase):
         False
         """
 
-        if not isStringlike(key, self._null_element):
+        if not isStringLike(key, self._null_element):
             raise TypeError('Key must be string-like with null element %r! '\
                     '(got %r)' % (self._null_element, key))
 
@@ -580,57 +901,6 @@ class TrieDict(object):
 
     def itervalues(self):
         pass
-
-#===============================================================================
-
-class StringLike(object):
-    """
-    Provides a string-like type for representing immutable sequences of tokens,
-    where a token is an arbitrary object. Essentially a thin wrapper around the
-    tuple type, with the key differences for string-likeness being the
-    implementations of __iter__, __getitem__, and __contains__.
-    """
-
-    Empty = None # reassigned below
-
-    def __init__(self, tokens=None):
-        self.tokens = tuple(tokens) if tokens else ()
-
-    def __bool__(self):
-        return bool(self.tokens)
-
-    def __repr__(self):
-        if self:
-            return 'StringLike(%r)' % (self.tokens,)
-        return 'StringLike.Empty'
-
-    def __hash__(self):
-        return hash(self.tokens)
-
-    def __getitem__(self, i):
-        return StringLike((self.tokens[i],))
-
-    def __cmp__(self, other):
-        return cmp(self.tokens, other.tokens)
-
-    def __iter__(self):
-        for tok in self.tokens:
-            yield StringLike((tok,))
-
-    def __len__(self):
-        return len(self.tokens)
-
-    def __add__(self, other):
-        return StringLike(self.tokens + other.tokens)
-
-    def __contains__(self, other):
-        if other == StringLike.Empty:
-            return True
-        for match in KnuthMorrisPratt(self, other):
-            return True
-        return False
-
-StringLike.Empty = StringLike()
 
 #===============================================================================
 
