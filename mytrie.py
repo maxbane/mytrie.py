@@ -2,7 +2,7 @@
 mytrie.py -- Generic tries for Python
 =====================================
 
-Copyright 2011 by Max Bane.
+Copyright 2011 by Max Bane.  
 Distributed subject to the Creative Commons Attribution 3.0 Unported license (CC
 BY 3.0): http://creativecommons.org/licenses/by/3.0/
 
