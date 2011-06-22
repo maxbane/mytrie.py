@@ -1,2 +1,2 @@
 #!/bin/bash
-awk '/mytrie.py/,/END MODULE DOC/' mytrie.py > README.md
+awk '/mytrie.py/,/END MODULE DOC/' mytrie.py | head -n-1 > README.md
