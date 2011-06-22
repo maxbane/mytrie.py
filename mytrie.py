@@ -76,21 +76,57 @@ The module-level function `isStringLike` is provided to assist you in
 determining whether your custom types are string-like.
 
 Furthermore, a fully general `StringLike` class is provided, which is capable of
-representing sequences of of objects of any (possibly heterogeneous) types, and
-satisfying the conditions of string-likeness for use with the generic trie
-classes. 
+representing sequences of objects of any hashable types (possibly
+heterogeneous), and satisfying the conditions of string-likeness for use with
+the generic trie classes. 
 
 Examples
 --------
 
-See the method docstrings below for more examples.
+See the method docstrings of the trie classes for more examples.
 
 `TODO`
+
+Performance
+-----------
+
+For large collections of strings, the trie classes can be quite a bit faster at
+finding prefix/suffix relationships than naive methods using built-in types. For
+example, let's create a module `test.py` like so:
+
+    import mytrie
+    
+    # 565 kiloword novel
+    corpus = open('war_and_peace.txt', 'r').read()
+    tokens = corpus.split()
+    
+    s = set(tokens)
+    ts = mytrie.TrieSet(tokens)
+    
+    def naive_extensions(prefix, collection):
+        for string in collection:
+            if string.startswith(prefix):
+                yield string
+
+A comparison of the naive generator of string extensions to
+`TrieSet.extensions`:
+
+    $ python -m timeit -s "import test" "list(test.naive_extensions('t', test.s))"
+    100 loops, best of 3: 12.8 msec per loop
+
+    $ python -m timeit -s "import test" "list(test.ts.extensions('t'))"
+    100 loops, best of 3: 6.64 msec per loop
+
+So `TrieSet.extensions` is about twice as fast, and the difference gets larger
+the more strings there are.
+
 
 END MODULE DOC
 """
 
 __version__ = "0.1.0"
+
+# TODO: Packing
 
 import operator
 
@@ -253,6 +289,11 @@ class StringLike(object):
             return True
         return False
 
+    def startswith(self, prefix):
+        if len(self) >= len(prefix):
+            return self.tokens[:len(prefix)] == prefix.tokens
+        return False
+
 StringLike.Empty = StringLike()
 
 #===============================================================================
@@ -294,7 +335,25 @@ class TrieBase(object):
                 return False
         return cur_node[1]
 
-    def __nodeOf(self, key):
+    def _makePathTo(self, key):
+        """
+        TODO: doc for subclassers.
+        """
+        if not isStringLike(key, self._null_element):
+            raise TypeError('Key must be string-like with null element %r! '\
+                    '(got %r)' % (self._null_element, key))
+
+        cur_node = self._root
+        for el in key:
+            try:
+                cur_node = cur_node[0][el]
+            except KeyError:
+                new_node = [{}, False]
+                cur_node[0][el] = new_node
+                cur_node = new_node
+        return cur_node
+
+    def _nodeOf(self, key):
         cur_node = self._root
         for el in key:
             try:
@@ -307,7 +366,7 @@ class TrieBase(object):
         """
         Return True if the given string-like is a prefix of any contained key.
         """
-        return self.__nodeOf(prefix) is not None
+        return self._nodeOf(prefix) is not None
 
     def __pathTo(self, key):
         cur_node = self._root
@@ -372,17 +431,17 @@ class TrieBase(object):
         """
 
         # find the node where the given prefix ends, if any
-        node = self.__nodeOf(prefix)
+        node = self._nodeOf(prefix)
         if node is None:
             raise KeyError('%r is not a prefix of any contained element.' %\
                     prefix)
         for el in node[0].iterkeys():
             yield prefix + el
 
-    def __generateSubNodes(self, start_node, prefix):
+    def _generateSubNodes(self, start_node, prefix):
         yield start_node, prefix
         for el, el_node in start_node[0].iteritems():
-            for node, subel in self.__generateSubNodes(el_node, prefix+el):
+            for node, subel in self._generateSubNodes(el_node, prefix+el):
                 yield node, subel
 
     def suffixes(self, prefix, members_only=True):
@@ -399,12 +458,12 @@ class TrieBase(object):
         See subclass docstrings for usage examples with each subclass.
         """
         # find the node where the given prefix ends, if any
-        node = self.__nodeOf(prefix)
+        node = self._nodeOf(prefix)
         if node is None:
             raise KeyError('%r is not a prefix of any contained element.' %\
                     prefix)
 
-        for node, suff in self.__generateSubNodes(node, self._null_element):
+        for node, suff in self._generateSubNodes(node, self._null_element):
             if (not members_only) or node[1]:
                 yield suff
 
@@ -417,13 +476,13 @@ class TrieBase(object):
         See subclass docstrings for usage examples with each subclass.
         """
         # find the node where the given prefix ends, if any
-        node = self.__nodeOf(prefix)
+        node = self._nodeOf(prefix)
         if node is None:
             raise KeyError('%r is not a prefix of any contained element.' %\
                     prefix)
 
         maxSuff = self._null_element
-        for node, suff in self.__generateSubNodes(node, self._null_element):
+        for node, suff in self._generateSubNodes(node, self._null_element):
             if node[1] and len(suff) > len(maxSuff):
                 maxSuff = suff
 
@@ -672,6 +731,8 @@ class TrieSet(TrieBase):
         # [suffixes, is_member]
         self._root = [{}, False]
 
+        self.__len = 0
+
         if contents is not None:
             self.update(contents)
 
@@ -684,6 +745,9 @@ class TrieSet(TrieBase):
         """
         return 'TrieSet(%r, null_element=%r)' % (list(self),
                 self._null_element)
+
+    def __len__(self):
+        return self.__len
 
     def __eq__(self, trieSet):
         """
@@ -723,20 +787,10 @@ class TrieSet(TrieBase):
         False
         """
 
-        if not isStringLike(key, self._null_element):
-            raise TypeError('Key must be string-like with null element %r! '\
-                    '(got %r)' % (self._null_element, key))
-
-        cur_node = self._root
-        for el in key:
-            try:
-                cur_node = cur_node[0][el]
-            except KeyError:
-                new_node = [{}, False]
-                cur_node[0][el] = new_node
-                cur_node = new_node
-
-        cur_node[1] = True # is_member
+        new_node = self._makePathTo(key)
+        if not new_node[1]:
+            self.__len += 1
+            new_node[1] = True # is_member
 
     def update(self, keys):
         """
@@ -843,7 +897,7 @@ class TrieSet(TrieBase):
 
 #===============================================================================
 
-class TrieDict(object):
+class TrieDict(TrieBase):
     """
     An associative trie for space-efficiently mapping string-like keys to
     arbitrary values, with fast enumeration of key extensions, successors,
@@ -851,7 +905,8 @@ class TrieDict(object):
     built-in dict type.
 
     Keys must be string-like, and once added to the TrieDict, cannot be removed
-    (unlike a built-in dict).
+    (unlike a built-in dict), though the value mapped to by a key can be
+    overwritten.
 
     If given, items should be one of the following:
         - a sequence of (key, value) tuples with which to initially populate the
@@ -863,10 +918,14 @@ class TrieDict(object):
     null_element, if given, should be the null object for whatever string-like
     type will be added to the TrieSet (see module documentation for definitions).
     If not given, it defaults to '', the null element for type str.
+
+    Examples
+    ========
+
     """
 
     def __init__(self, items=None, null_element=''):
-        super(TrieSet, self).__init__(null_element)
+        super(TrieDict, self).__init__(null_element)
 
         # [suffixes, is_member, value]
         self._root = [{}, False, None]
@@ -879,27 +938,45 @@ class TrieDict(object):
                 self._null_element)
 
     def __setitem__(self, key, value):
-        pass
+        new_node = self._makePathTo(key)
+        new_node[1] = True # is_member
+        # set value
+        try:
+            new_node[2] = value
+        except IndexError:
+            new_node.append(value) 
 
     def __getitem__(self, key, value):
-        pass
+        node = self._nodeOf(key)
+        if not (node and node[1]):
+            raise KeyError('%r' % key)
+        return node[2]
 
     def iteritems(self):
-        pass
+        for node, keyfragment in self._generateSubNodes(self._root,
+                self._null_element):
+            if node[1]:
+                yield keyfragment, node[2]
 
     def items(self):
-        pass
+        return list(self.iteritems())
 
     def keys(self):
-        pass
+        return list(self)
 
     def iterkeys(self):
-        pass
+        return iter(self)
 
     def values(self):
-        pass
+        return list(self.itervalues())
 
     def itervalues(self):
+        for node, keyfragment in self._generateSubNodes(self._root,
+                self._null_element):
+            if node[1]:
+                yield node[2]
+
+    def update(self, source):
         pass
 
 #===============================================================================
