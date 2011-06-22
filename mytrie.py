@@ -94,22 +94,25 @@ For large collections of strings, the trie classes can be quite a bit faster at
 finding prefix/suffix relationships than naive methods using built-in types. For
 example, let's create a module `test.py` like so:
 
-    import mytrie
-    
-    # 565 kiloword novel
-    corpus = open('war_and_peace.txt', 'r').read()
-    tokens = corpus.split()
-    
-    s = set(tokens)
-    ts = mytrie.TrieSet(tokens)
-    
-    def naive_extensions(prefix, collection):
-        for string in collection:
-            if string.startswith(prefix):
-                yield string
+```python
+import mytrie
+
+# 565 kiloword novel
+corpus = open('war_and_peace.txt', 'r').read()
+tokens = corpus.split()
+
+s = set(tokens)
+ts = mytrie.TrieSet(tokens)
+
+def naive_extensions(prefix, collection):
+    for string in collection:
+        if string.startswith(prefix):
+            yield string
+```
 
 A comparison of the naive generator of string extensions to
-`TrieSet.extensions`:
+`TrieSet.extensions`, using both to create a list of words that start with
+`'t'`:
 
     $ python -m timeit -s "import test" "list(test.naive_extensions('t', test.s))"
     100 loops, best of 3: 12.8 msec per loop
