@@ -937,7 +937,7 @@ class TrieDict(TrieBase):
             self.update(items)
 
     def __repr__(self):
-        return 'TrieDict(%r, null_element=%r)' % (self.items(),
+        return 'TrieDict(%r, null_element=%r)' % (dict(self.iteritems()),
                 self._null_element)
 
     def __setitem__(self, key, value):
@@ -980,7 +980,12 @@ class TrieDict(TrieBase):
                 yield node[2]
 
     def update(self, source):
-        pass
+        if hasattr(source, 'keys'):
+            for k in source:
+                self[k] = source[k]
+        elif hasattr(source, '__iter__'):
+            for k,v in source:
+                self[k] = v
 
 #===============================================================================
 
