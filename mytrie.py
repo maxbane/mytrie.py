@@ -307,14 +307,7 @@ class TrieBase(object):
     subclasses must:
       - call `super(Subclass, self).__init__(null_element)` in their
         constructors.
-      - create a self._root member variable which must be a list whose first
-        element is a dictionary (initially `{}`) from string elements to
-        associated subnodes, and whose second element is a boolean (initially
-        `False`) indicating whether a contained key terminates at the root node;
-        each subnode must have the same structure. The list may contain
-        additional elements, for functionality specific to the subclass. See the
-        implementation of `TrieSet` for the simplest example.
-      - implement some method of adding keys; see `TrieSet.add()` for an
+      - implement some method for adding keys; see `TrieSet.add()` for an
         example.
     """
     def __init__(self, null_element):
@@ -324,13 +317,14 @@ class TrieBase(object):
             raise TypeError('null_element %r is not itself string-like!' %\
                     (null_element,))
 
+        # root node. nodes are lists of length >= 2,
+        # whose first element is a dictionary from elements to associated
+        # subnodes, second element is bool indicating whether a key terminates
+        # at the node. any further elements can be maintained by subclasses
+        # (e.g., TrieDict)
         # [suffixes, is_member]
         self._root = [{}, False]
 
-        # subclasses should create a root node. nodes are lists of length >= 2,
-        # whose first element is a dictionary from elements to associated
-        # subnodes, second element is bool indicating whether a key terminates
-        # at the node.
 
     def __contains__(self, key):
         cur_node = self._root
