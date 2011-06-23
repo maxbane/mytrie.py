@@ -130,6 +130,7 @@ END MODULE DOC
 __version__ = "0.1.0"
 
 # TODO: Packing
+# - adds requirement of sliceability to string-likeness
 
 import operator
 
@@ -298,6 +299,16 @@ class StringLike(object):
         return False
 
 StringLike.Empty = StringLike()
+
+#===============================================================================
+
+def itertail(seq):
+    """
+    For each element `e` in sliceable sequence `seq`, yield `(e, tail)`, where
+    `tail` is the (possibly empty) remainder of `seq` that follows `e`.
+    """
+    for (i, e) in enumerate(seq):
+        yield e, seq[i+1:]
 
 #===============================================================================
 
