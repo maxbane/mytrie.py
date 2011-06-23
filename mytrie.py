@@ -324,6 +324,9 @@ class TrieBase(object):
             raise TypeError('null_element %r is not itself string-like!' %\
                     (null_element,))
 
+        # [suffixes, is_member]
+        self._root = [{}, False]
+
         # subclasses should create a root node. nodes are lists of length >= 2,
         # whose first element is a dictionary from elements to associated
         # subnodes, second element is bool indicating whether a key terminates
@@ -731,9 +734,6 @@ class TrieSet(TrieBase):
     def __init__(self, contents=None, null_element=''):
         super(TrieSet, self).__init__(null_element)
 
-        # [suffixes, is_member]
-        self._root = [{}, False]
-
         self.__len = 0
 
         if contents is not None:
@@ -929,9 +929,6 @@ class TrieDict(TrieBase):
 
     def __init__(self, items=None, null_element=''):
         super(TrieDict, self).__init__(null_element)
-
-        # [suffixes, is_member, value]
-        self._root = [{}, False, None]
 
         if items is not None:
             self.update(items)
